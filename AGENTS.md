@@ -1,0 +1,10 @@
+# EarthSona coding-agent guide
+
+Start with [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md), and the current Git status. Keep changes scoped to the request. Use Node.js 22.12 or later in the Node 22 line and run `npm ci`, `npm test`, and `npm run build`. The build runs `npm run check` before Vite. Smoke-test the production output with `npm run preview -- --host 127.0.0.1`.
+
+- `src/main.ts` owns shared UI state, scan and transport, preferences, and the playback session. `src/style.css` and `src/redesign.css` hold layout and themes, with accent logic in `src/appearance.ts`.
+- Keep live playback under the shared session in `src/audio.ts`. Stop and Escape must cancel queued notes, scheduled Flow, and pending scrub or resume work. Switching datasets or replacing playback must invalidate stale work. Player and Lab share transport and speed. Studio preview uses the same playback session, and Studio download uses the separate renderer in `src/studio-export.ts`.
+- Preserve sustained Ambient Flow across sparse scan samples and wraparound. Keep the scheduling horizon and reusable voices in `src/flow-audio.ts` and phrasing in `src/arrangement.ts`. Check that Stop clears sound and that waking from a stalled timer cannot replay a backlog.
+- `src/datasets.ts` owns imagery, bounds, presets, classifier, and credits. `src/sampling.ts` owns patch and scan-column rules. Keep globe picking and the visible markers aligned to normalized source pixels through `src/globe.ts` and `src/projection.ts`. Retain the 2D option, automatic globe fallback, and 2D-only handling for unaligned stills.
+- Keep runtime assets under `public/` and document their provenance in [docs/DATASETS.md](docs/DATASETS.md). Keep code licensing and asset credits separate. After install, core playback and export must work over a local HTTP server with external requests blocked.
+- Keep English and Turkish user-facing strings, labels, help, and dataset descriptions in sync. Check `src/i18n.ts`, `src/datasets.ts`, `src/studio.ts`, and the launch messages in `index.html`. Test both languages at narrow and wide viewports.
