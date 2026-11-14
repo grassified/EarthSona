@@ -1,6 +1,6 @@
 # EarthSona
 
-EarthSona is an open-source, responsive web app by **Asteronix**, a team within **UHRET (Hackathon, Robotik ve Elektronik Topluluğu)**. It began with *The Earth Information Jukebox* challenge at the 2026 NASA Space Apps Challenge. [EarthSona on GitHub](https://github.com/grassified/EarthSona)
+EarthSona is an open-source, responsive web app by **Asteronix**, a team within **UHRET (Hackathon, Robotik ve Elektronik Topluluğu)**. It began with *The Earth Information Jukebox* challenge at the 2026 NASA Space Apps Challenge.
 
 Choose a NASA Earth visualization, then select a region or scan across the image. EarthSona counts pixels that match the dataset's color rules in a patch or scan column. The categories determine whether pitches rise or fall, and the proportion of matching pixels affects the pitch interval. **Motif** plays short phrases. **Flow** arranges successive samples into phrases or sustained accompaniment. Pitch, harmony, and timing are musical choices, and the percentages describe the bundled image pixels.
 
@@ -41,14 +41,8 @@ The production preview usually runs at `http://127.0.0.1:4173/` and serves the b
 
 Aligned datasets use the same source pixels for globe and flat-map sampling. Choose **2D** directly, or use the automatic flat fallback if the globe canvas cannot initialize. [Dataset sources, processing, and mapping](docs/DATASETS.md)
 
-### Jury walkthrough
-
-1. Open **Night Lights** in **Data Listening** with **Motif**. Play **Western India**, then **Western Europe**. The first plays three rising notes and the second plays three falling notes.
-2. Start the scan, use **Lab** to show the highlighted sample and pixel coverage, then stop with **Escape**. Explain how color categories drive pitch direction.
-3. Try **Ocean Currents → Ambient → Flow** for continuous playback, or add a sampled phrase to **Studio**, change a step, and export WAV.
-
 ## Credits and contributing
 
 [@AmiralG961](https://github.com/AmiralG961)'s v0.2.0 browser prototype inspired map dragging and scan feedback. [@Yasinoguz01](https://github.com/Yasinoguz01)'s designs inspired the mobile Player. NASA's Scientific Visualization Studio supplied the four dataset images and NASA Earth Observatory supplied the Blue Marble backdrop. [Asset credits](docs/DATASETS.md)
 
-The app code uses the repository's existing [GNU General Public License, version 3](LICENSE). Third-party imagery retains its own attribution and applicable terms. See the [contributor guide](CONTRIBUTING.md), [security reporting status](SECURITY.md), and [roadmap](ROADMAP.md).
+The app code uses the [GNU General Public License, version 3](LICENSE). Third-party imagery retains its own attribution and applicable terms. See the [contributor guide](CONTRIBUTING.md), [security reporting status](SECURITY.md), and [roadmap](ROADMAP.md).
