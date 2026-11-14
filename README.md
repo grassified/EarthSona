@@ -6,6 +6,8 @@ Choose a NASA Earth visualization, then select a region or scan across the image
 
 ## Run locally
 
+Clone [grassified/EarthSona](https://github.com/grassified/EarthSona) and open the project directory.
+
 Use Node.js 22.12 or later in the Node 22 line. From the repository root:
 
 ```sh
@@ -17,12 +19,11 @@ Open the HTTP address printed by Vite, usually `http://127.0.0.1:5173/`. Opening
 
 ```sh
 npm test
-npm run check
 npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-The production preview usually runs at `http://127.0.0.1:4173/` and serves the build in `dist/`. After dependency installation, imagery, playback, and export work locally. External source links require internet access.
+The build runs `npm run check` before Vite. The production preview usually runs at `http://127.0.0.1:4173/` and serves the build in `dist/`. After dependency installation, imagery, playback, and export work locally. External source links require internet access.
 
 ## Explore and make music
 

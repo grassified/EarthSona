@@ -1,29 +1,36 @@
 # Contributing to EarthSona
 
-Start from the latest `main` and make a focused feature branch. Push that branch and open a pull request against `main`. Include what changed, how you checked it, and any remaining verification. Follow the review and checks shown on the PR.
+Use a small branch for each feature or fix so teammates can work in parallel. Start with a clean working tree and use Node.js 22.12 or later in the Node 22 line.
 
 ```sh
 git switch main
 git pull --ff-only origin main
 git switch -c feat/your-change
 npm ci
-npm run dev -- --host 127.0.0.1
 npm test
 npm run build
-npm run preview -- --host 127.0.0.1
 ```
 
-Use the Node.js version in [README.md](README.md). Commit source, tests, required assets, and lockfile updates. Keep generated builds, dependency directories, internal team files, raw prototypes, and credentials outside the PR.
+Use `fix/your-change` for a bug fix. If the fast-forward fails, inspect the diverged history before continuing. Preserve teammates' work when incorporating updates. Run `npm run dev -- --host 127.0.0.1` while editing and `npm run preview -- --host 127.0.0.1` after a build to check the production output.
 
-## Worked example using Night Lights
+Stage the files you reviewed and commit them. Review the staged diff before committing. Keep credentials, private references, raw prototypes, dependencies, and generated builds out of commits.
 
-1. Put the verified raster in `public/maps/`. Night Lights uses `night-lights.png`, a 1496 × 864 crop resized from the single global panel in NASA SVS 5313. Record the source page, credit, frame or timestamp, crop, dimensions, and usage terms in [docs/DATASETS.md](docs/DATASETS.md).
-2. Add a `Dataset` in `src/datasets.ts`. For Night Lights, use verified global equirectangular bounds and classify purple pixels as `1`, orange as `-1`, and other pixels as `0`. Omit `geography` for a still without verified geographic alignment.
-3. Pick opposing presets on the bundled image. Night Lights uses Western India at `{ x: .690, y: .378 }` and Western Europe at `{ x: .466, y: .270 }`. Run them through the shared sampler and verify rising and falling phrases. Test a sparse or neutral area and compare a globe-picked position with its location in 2D.
-4. Supply English and Turkish names, descriptions, source processing, mappings, sign labels, and preset names. Explain the visible classes and what the generated sound represents. Add a focused test if a mapping or projection changes behavior outside the cases already covered.
+```sh
+git push -u origin HEAD
+```
+
+On GitHub, open a pull request against `main`. Give it one purpose, explain why the change matters, and record what you tested. Include before and after screenshots for UI changes. Keep unrelated formatting and refactoring in separate PRs.
+
+CI runs `npm ci`, `npm test`, and `npm run build`. The build runs the TypeScript check before Vite. If CI fails, open the failed step, reproduce its command on Node 22 with a clean install, and push the fix to the same branch. Use `npm run check` to isolate type errors. Check the new run after pushing.
+
+## Module boundaries and performance
+
+Reuse the shared playback session and existing modules. Keep pixel sampling, audio scheduling, UI interactions, language strings, and dataset configuration in their respective modules. See the [source map and invariants](AGENTS.md) and the [dataset contribution example](docs/DATASETS.md#adding-a-dataset).
+
+For changes to animation, audio, or runtime assets, compare the baseline and proposed build using the same browser, viewport, dataset, and playback settings. Check for duplicate render loops, a growing queue of scheduled voices, or unnecessary asset requests. Report evidence proportionate to the change, such as a request count, a short playback trace, or a performance recording.
 
 ## Playback and responsive checks
 
 In production preview, check narrow and wide layouts in English and Turkish. Exercise keyboard focus and reduced motion. For playback changes, test the combined Play/Stop control, Escape during playback and queued interactions, and 0.25× and 5× scan speeds when moving between Player and Lab. Compare the Night Lights reference motifs, verify Ocean Currents Ambient Flow across a wrap, and try Studio preview and WAV export. Try WebM / Opus when available.
 
-Record the browser and viewport or device you actually used. Report audio instrumentation separately from by-ear and physical speaker testing, and distinguish keyboard testing from screen-reader testing.
+Record the browser and viewport or device you used. A passing build and browser instrumentation cover only the behavior they exercise. Mark unperformed physical-device, screen-reader, and by-ear checks as **Pending** in the PR and name the scenario still to verify.
