@@ -4,7 +4,13 @@ EarthSona is an open-source, responsive web app by **Asteronix**, a team within 
 
 Choose a NASA Earth visualization, then select a region or scan across the image. EarthSona counts pixels that match the dataset's color rules in a patch or scan column. The categories determine whether pitches rise or fall, and the proportion of matching pixels affects the pitch interval. **Motif** plays short phrases. **Flow** arranges successive samples into phrases or sustained accompaniment. Pitch, harmony, and timing are musical choices, and the percentages describe the bundled image pixels.
 
+<p><a href="docs/screenshots/iss-lightning-globe.webp"><img src="docs/screenshots/iss-lightning-globe.webp" width="900" alt="ISS Lightning displayed on the globe beside the Player controls"></a><br><em>ISS Lightning on the globe</em></p>
+
+[Run locally](#run-locally) · [Try the demo](#demo-walkthrough) · [Contributing](CONTRIBUTING.md) · [Dataset guide](docs/DATASETS.md)
+
 ## Run locally
+
+Clone [grassified/EarthSona](https://github.com/grassified/EarthSona) and open the project directory.
 
 Use Node.js 22.12 or later in the Node 22 line. From the repository root:
 
@@ -17,12 +23,11 @@ Open the HTTP address printed by Vite, usually `http://127.0.0.1:5173/`. Opening
 
 ```sh
 npm test
-npm run check
 npm run build
 npm run preview -- --host 127.0.0.1
 ```
 
-The production preview usually runs at `http://127.0.0.1:4173/` and serves the build in `dist/`. After dependency installation, imagery, playback, and export work locally. External source links require internet access.
+The build runs `npm run check` before Vite. The production preview usually runs at `http://127.0.0.1:4173/` and serves the build in `dist/`. After dependency installation, imagery, playback, and export work locally. External source links require internet access.
 
 ## Explore and make music
 
@@ -40,6 +45,33 @@ The production preview usually runs at `http://127.0.0.1:4173/` and serves the b
 | ISS Lightning | Dense and sparse yellow lightning marks | Aligned globe and 2D |
 
 Aligned datasets use the same source pixels for globe and flat-map sampling. Choose **2D** directly, or use the automatic flat fallback if the globe canvas cannot initialize. [Dataset sources, processing, and mapping](docs/DATASETS.md)
+
+## Demo walkthrough
+
+1. In **Night Lights**, choose **Data Listening** and **Motif**. Play **Western India** for three rising notes, then **Western Europe** for three falling notes. Open **2D** or **Sonification Lab** to show where the selected sample comes from.
+2. Open **Ocean Currents**, choose **Ambient** and **Flow**, and press **Play** to hear the scan move across warm and cool colors. Press **Stop** or **Escape** to end playback.
+3. Return to **Night Lights** and audition **Western India** in **Data Listening** and **Motif**. With the valid sample shown, choose **Add to Studio**, edit a step, and preview the loop. Export **WAV** or **WebM / Opus** if your browser offers it.
+
+## Screenshots
+
+Select an image to open it at full size.
+
+<p><a href="docs/screenshots/night-lights-2d.webp"><img src="docs/screenshots/night-lights-2d.webp" width="590" alt="Night Lights flat map with region markers and scan controls"></a><br><em>Night Lights in 2D</em></p>
+
+<p><a href="docs/screenshots/sonification-lab.webp"><img src="docs/screenshots/sonification-lab.webp" width="590" alt="Sonification Lab with a sound ring, region presets, and mapping explanation"></a><br><em>Sonification Lab</em></p>
+
+<p><a href="docs/screenshots/studio.webp"><img src="docs/screenshots/studio.webp" width="590" alt="Studio with the 16-step editor and export controls"></a><br><em>Studio loop editor</em></p>
+
+<details>
+<summary>Explore, Library, and Settings</summary>
+
+<p><a href="docs/screenshots/explore.webp"><img src="docs/screenshots/explore.webp" width="590" alt="Explore with dataset categories and four NASA visualizations"></a><br><em>Explore the dataset catalog</em></p>
+
+<p><a href="docs/screenshots/library.webp"><img src="docs/screenshots/library.webp" width="590" alt="Library with favorites and recently played filters"></a><br><em>Library favorites and recent datasets</em></p>
+
+<p><a href="docs/screenshots/settings.webp"><img src="docs/screenshots/settings.webp" width="590" alt="Settings with language, motion, theme, and accent controls"></a><br><em>Language, motion, and appearance settings</em></p>
+
+</details>
 
 ## Credits and contributing
 

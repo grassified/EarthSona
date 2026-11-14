@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible EarthSona problem.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form creates a public issue. Keep secrets, private references, and vulnerability details out of it. See [SECURITY.md](https://github.com/grassified/EarthSona/blob/main/SECURITY.md) for security reporting.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Start from a fresh page and list the shortest steps that trigger the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and playback settings
+      description: Include relevant details and leave unrelated fields blank.
+      placeholder: |
+        EarthSona commit or URL:
+        Browser and version:
+        Device and OS:
+        Dataset:
+        Listening mode (Data Listening or Ambient):
+        Playback style (Motif or Flow):
+        View (Globe or 2D):
+        Scan speed:
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Supporting evidence
+      description: Add a screenshot, short recording, or relevant console output if it helps reproduce the issue.
