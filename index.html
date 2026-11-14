@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10131c">
+    <meta name="description" content="Listen to NASA Earth imagery with EarthSona, a sonification jukebox by Asteronix – UHRET.">
+    <link rel="icon" href="data:,">
+    <title>EarthSona</title>
+    <style>
+      #startup { max-width: 38rem; margin: 8vh auto; padding: 1.5rem; font: 1rem/1.6 system-ui, sans-serif; }
+      #startup code { white-space: nowrap; }
+      #startup-loading, #startup[data-state="loading"] .startup-help { display: none; }
+      #startup[data-state="loading"] #startup-loading { display: block; }
+    </style>
+  </head>
+  <body>
+    <main id="startup">
+      <h1>EarthSona</h1>
+      <p id="startup-loading" role="status">Loading EarthSona… / EarthSona yükleniyor…</p>
+      <div class="startup-help">
+        <p id="startup-summary">Open EarthSona from a Vite server with JavaScript enabled.</p>
+        <p>In the project folder, run <code>npm ci</code> and <code>npm run dev</code>, then open the HTTP URL printed by Vite and reload if needed.</p>
+        <p lang="tr" id="startup-summary-tr">EarthSona’yı JavaScript etkin bir tarayıcıda Vite sunucusu üzerinden aç.</p>
+        <p lang="tr">Proje klasöründe <code>npm ci</code> ve <code>npm run dev</code> komutlarını çalıştır. Vite’ın yazdırdığı HTTP adresini aç ve gerekirse sayfayı yenile.</p>
+      </div>
+    </main>
+    <div id="app" hidden></div>
+    <script>
+      const startup = document.getElementById('startup');
+      function showStartupError(en, tr) {
+        if (!startup.isConnected) return;
+        document.getElementById('startup-summary').textContent = en;
+        document.getElementById('startup-summary-tr').textContent = tr;
+        startup.dataset.state = 'help';
+      }
+      if (location.protocol === 'file:') {
+        showStartupError('This file is open from disk. Playback needs a local web server.',
+          'Bu dosya diskten açıldı. Sesli keşif için yerel bir web sunucusu gerekiyor.');
+      } else {
+        startup.dataset.state = 'loading';
+        window.addEventListener('load', () => {
+          showStartupError('EarthSona could not start. Check that Vite is running and JavaScript is enabled.',
+            'EarthSona başlatılamadı. Vite sunucusunun çalıştığını ve JavaScript’in etkin olduğunu kontrol et.');
+        }, { once: true });
+      }
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
