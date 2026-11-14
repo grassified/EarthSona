@@ -9,9 +9,9 @@
 
 ## Verification still open
 
-- Exercise touch, orientation changes, and playback on physical phones and tablets.
+- Exercise touch, orientation changes, and playback on a physical phone.
 - Test announcements, focus order, and playback controls with screen readers.
-- Listen on speakers and headphones for Motif contour, Ambient Flow continuity, and exported sound.
+- Listen on a mono speaker for the Night Lights contours, Ocean Currents Ambient Flow continuity, and Studio export playback.
 
 ## Optional post-hackathon work
 

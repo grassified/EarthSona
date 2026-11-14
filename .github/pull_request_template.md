@@ -1,11 +1,17 @@
-## Summary
+## Purpose
 
-What changed and why?
+Why does this change matter?
 
-## Testing
+## Changes
 
-List the commands and scenarios you ran, with results. Mark any unperformed device, screen-reader, or listening checks as pending.
+What changed?
 
-## Applicable notes
+## Test evidence
 
-Include only what applies. For UI changes, attach before and after screenshots. For audio or performance changes, give the comparison conditions and observed behavior. For assets, link the source, credits, and processing notes.
+List the commands and scenarios you ran, with results. Mark any relevant physical-device, screen-reader, or listening checks still pending.
+
+## If applicable
+
+- **UI** — Attach before and after screenshots.
+- **Dataset** — Link source credits and processing notes. Name the contrasting presets you verified.
+- **Audio, animation, or asset performance** — Give the before and after results from matching conditions. Include evidence proportionate to the change.
