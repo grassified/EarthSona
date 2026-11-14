@@ -1,5 +1,7 @@
 # Security reporting
 
-GitHub private vulnerability reporting is disabled for this repository. A private reporting channel for EarthSona has yet to be verified. Please keep vulnerability details and proof-of-concept files out of public issues and pull requests.
+Report suspected EarthSona vulnerabilities privately through GitHub. Sign in and open the [private vulnerability report form](https://github.com/grassified/EarthSona/security/advisories/new), or select **Report a vulnerability** on the [Security advisories page](https://github.com/grassified/EarthSona/security/advisories).
 
-A maintainer can enable **Private vulnerability reporting** under **Settings → Advanced Security**, then verify that **Security and quality → Advisories** offers **Report a vulnerability** and update this policy. [GitHub setup instructions](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configure-for-a-repository) The project has no published supported-version policy.
+Include the affected commit or version, steps to reproduce, and the potential impact. Keep vulnerability details, proof-of-concept files, and credentials out of public issues and pull requests.
+
+EarthSona has no published supported-version policy.
