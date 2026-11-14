@@ -1,6 +1,6 @@
 # EarthSona
 
-EarthSona is an open-source, responsive web app by **Asteronix**, a team within **UHRET (Hackathon, Robotik ve Elektronik Topluluğu)**. It began with *The Earth Information Jukebox* challenge at the 2026 NASA Space Apps Challenge. [EarthSona on GitHub](https://github.com/grassified/EarthSona)
+EarthSona is an open-source, responsive web app by **Asteronix**, a team within **UHRET (Hackathon, Robotik ve Elektronik Topluluğu)**. It began with *The Earth Information Jukebox* challenge at the 2026 NASA Space Apps Challenge.
 
 Choose a NASA Earth visualization, then select a region or scan across the image. EarthSona counts pixels that match the dataset's color rules in a patch or scan column. The categories determine whether pitches rise or fall, and the proportion of matching pixels affects the pitch interval. **Motif** plays short phrases. **Flow** arranges successive samples into phrases or sustained accompaniment. Pitch, harmony, and timing are musical choices, and the percentages describe the bundled image pixels.
 
@@ -77,4 +77,4 @@ Select an image to open it at full size.
 
 [@AmiralG961](https://github.com/AmiralG961)'s v0.2.0 browser prototype inspired map dragging and scan feedback. [@Yasinoguz01](https://github.com/Yasinoguz01)'s designs inspired the mobile Player. NASA's Scientific Visualization Studio supplied the four dataset images and NASA Earth Observatory supplied the Blue Marble backdrop. [Asset credits](docs/DATASETS.md)
 
-The app code uses the repository's existing [GNU General Public License, version 3](LICENSE). Third-party imagery retains its own attribution and applicable terms. See the [contributor guide](CONTRIBUTING.md), [security reporting status](SECURITY.md), and [roadmap](ROADMAP.md).
+The app code uses the [GNU General Public License, version 3](LICENSE). Third-party imagery retains its own attribution and applicable terms. See the [contributor guide](CONTRIBUTING.md), [security reporting status](SECURITY.md), and [roadmap](ROADMAP.md).
