@@ -75,6 +75,6 @@ Select an image to open it at full size.
 
 ## Credits and contributing
 
-[@AmiralG961](https://github.com/AmiralG961)'s v0.2.0 browser prototype inspired map dragging and scan feedback. [@Yasinoguz01](https://github.com/Yasinoguz01)'s designs inspired the mobile Player. NASA's Scientific Visualization Studio supplied the four dataset images and NASA Earth Observatory supplied the Blue Marble backdrop. [Asset credits](docs/DATASETS.md)
+[@AmiralG975f](https://github.com/AmiralG975f)'s v0.2.0 browser prototype inspired map dragging and scan feedback. [@Yasinoguz01](https://github.com/Yasinoguz01)'s designs inspired the mobile Player. NASA's Scientific Visualization Studio supplied the four dataset images and NASA Earth Observatory supplied the Blue Marble backdrop. [Asset credits](docs/DATASETS.md)
 
 The app code uses the [GNU General Public License, version 3](LICENSE). Third-party imagery retains its own attribution and applicable terms. See the [contributor guide](CONTRIBUTING.md), [security reporting status](SECURITY.md), and [roadmap](ROADMAP.md).
