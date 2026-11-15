@@ -4,12 +4,12 @@ import { numberWithin, type Note } from './composition';
 import { restoreComposition, studioMarkup } from './studio';
 import { mountGlobe } from './globe';
 import { radians, type GlobeView } from './projection';
-import type { Style } from './arrangement';
+import { motif, type Mode, type Style } from './arrangement';
 import './style.css';
 import './redesign.css';
 import { datasets, type Dataset, type Language, type Point, type Signal } from './datasets';
-import { motif, Player, type Mode } from './audio';
-import { sample, scanColumns } from './sampling';
+import { Player } from './audio';
+import { sample, sampleAudition, sampleRgb, scanColumns, scanRow, scanBounds, type Rgb } from './sampling';
 import { copy } from './i18n';
 
 const icons = {
@@ -39,7 +39,7 @@ const icon = (name: keyof typeof icons) =>
   `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;
 
 type View = 'explore' | 'studio' | 'library' | 'about' | 'compose' | 'lab';
-type Selection = { point: Point; label: 'point' | 'scanPoint' } | { point: Point; region: number };
+type Selection = { point: Point; label: 'point' | 'scanPoint' | 'rowPoint' | 'direct' } | { point: Point; region: number };
 type Status = 'ready' | 'starting' | 'listening' | 'stopped' | 'audioError';
 const player = new Player(() => {
   stopInteraction();
@@ -62,6 +62,7 @@ applyAppearance(document.documentElement, theme, accent);
 
 function updateAppearance() {
   applyAppearance(document.documentElement, theme, accent);
+  syncRing();
   savePreference('earthsona-theme', theme);
   savePreference('earthsona-accent', accent);
   const picker = app.querySelector<HTMLInputElement>('#settings-accent');
@@ -73,18 +74,26 @@ function updateAppearance() {
 
 let rotation = preference('earthsona-rotation', 'on') === 'on';
 let motion = preference('earthsona-motion', 'system');
+let laser = preference('earthsona-scan-appearance', 'laser') !== 'classic';
+let stereoPositioning = preference('earthsona-stereo-positioning', 'on') !== 'off';
+let quickPlayback = preference('earthsona-quick-playback', 'off') === 'on';
 const reduced = () => motion === 'reduce' || (motion !== 'full' && motionQuery.matches);
 let flat = false;
+let globeAction: 'audition' | 'rotate' = 'audition';
 const globeView: GlobeView = { longitude: 25 * radians, latitude: 15 * radians };
-let disposeGlobe = () => {};
+let globe: ReturnType<typeof mountGlobe> | undefined;
 let globeBackdrop: ImageData | undefined;
 let backdropRequested = false;
-function applyMotion() { document.documentElement.classList.toggle('reduce-motion', reduced()); }
+function applyMotion() {
+  document.documentElement.classList.toggle('reduce-motion', reduced());
+  globe?.wake();
+}
 motionQuery.addEventListener('change', applyMotion);
 applyMotion();
 
 let view: View = 'studio';
 let disposeRing = () => {};
+let syncRing = () => {};
 let libraryFilter: 'all' | 'favorites' | 'recent' = 'all';
 let exploreFilter = '';
 const isPlayerView = () => view === 'studio' || view === 'lab';
@@ -191,7 +200,9 @@ function recordPlayback() {
 
 let dataset = datasets[0];
 let mode: Mode = 'data';
-let style: Style = 'motif';
+const styleKey = 'earthsona-playback-style';
+const savedStyle = preference(styleKey, 'motif');
+let style: Style = savedStyle === 'flow' || savedStyle === 'rgb' ? savedStyle : 'motif';
 let volume = 65;
 let frame: ImageData | undefined;
 let frameError = false;
@@ -200,6 +211,7 @@ let selection: Selection | undefined;
 let signal: Signal | null = null;
 let scanning = false;
 let scanPosition = 0;
+let committedPoint: Point | undefined;
 function validSpeed(value: number) {
   return Number.isFinite(value) ? Math.min(100, Math.max(5, Math.round(value * 20))) / 20 : 1;
 }
@@ -218,7 +230,7 @@ function updateSpeed(value: number) {
 }
 
 function transportActive() {
-  return scanning || status === 'listening' || status === 'starting' || !!scrubTimer || !!resumeTimer || !!scrub?.resume;
+  return scanning || status === 'listening' || status === 'starting' || !!scrubTimer || !!resumeTimer || !!scrub?.resume || !!gesture;
 }
 let columns: ReturnType<typeof scanColumns> = [];
 let preview = false;
@@ -229,7 +241,15 @@ let lastScrub = -Infinity;
 let resumeTimer = 0;
 let scanFrame = 0;
 let playbackRequest = 0;
-let gesture: { map: HTMLElement; pointer: number; x: number; y: number; sampledAt: number } | undefined;
+type PointerSample = { point: Point; screenX: number };
+let pointerSample: PointerSample | null = null;
+let pointerFrame = 0;
+let gesture: {
+  surface: HTMLElement; pointer: number; resume: boolean;
+  lastKey?: string; nextAt: number; timer: number;
+  originX: number; originY: number; dragged: boolean;
+  origin: Point; lastAudition?: Point;
+} | undefined;
 const dragInterval = { data: 235, ambient: 510 };
 const percent = {
   en: new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 1 }),
@@ -289,9 +309,11 @@ function favoriteButton(item: Dataset) {
 }
 
 function render() {
+  if (gesture) stopInteraction('ready');
+  else clearPointer();
   disposeRing();
-  disposeGlobe();
-  disposeGlobe = () => {};
+  globe?.dispose();
+  globe = undefined;
   const t = copy[language];
   document.documentElement.lang = language;
   const nav = (name: View) => `<button data-view="${name}" ${view === name ? 'aria-current="page"' : ''}>${icon(name)}<span>${name === 'studio' ? t.player : t[name]}</span></button>`;
@@ -304,29 +326,33 @@ function render() {
   const catalog = () => datasets.map(deck).join('');
   const isGlobe = !!dataset.geography && !flat && !frameError;
   const labPage = view === 'lab';
+  const pageTitle = view === 'studio' ? 'EarthSona' : view === 'about' ? t.settings : t[view];
   const scanProgress = `<label class="progress-label"><span>${t.scanProgress}</span><output id="scan-progress-value">0%</output>
     <input id="scan-position" aria-label="${t.scanPosition}" type="range" min="0" max="1000" value="0"></label>`;
   const scanSpeedControl = `<div class="range-control"><label for="scan-speed">${t.scanSpeed}</label><input id="scan-speed" type="range" min="0.25" max="5" step="0.05" value="${scanSpeed}"><output id="scan-speed-value" for="scan-speed">${speedLabel()}</output><button class="secondary normal-speed" data-normal-speed aria-label="${t.normalSpeed}" title="${t.normalSpeed}">1×</button></div>`;
   const studio = `
-    ${labPage ? `<h1 class="page-title">${t.lab}</h1>` : ''}
-    <div class="workspace ${labPage ? 'lab-layout' : 'player-layout'}" data-active-dataset="${dataset.id}">
+    <div class="workspace ${labPage ? 'lab-layout' : 'player-layout'}" data-active-dataset="${dataset.id}" data-scan-appearance="${laser ? 'laser' : 'classic'}">
       <section class="map-card" aria-label="${t.mapView}" ${labPage ? 'hidden' : ''}>
         <div class="map-view" role="group" aria-label="${t.mapView}">
           ${dataset.geography ? `<button class="secondary" data-display="globe" aria-pressed="${isGlobe}">${t.globe}</button>` : ''}
           <button class="secondary" data-display="flat" aria-pressed="${!isGlobe}">${t.flatMap}</button>
         </div>
+        ${isGlobe && !labPage ? `<div class="globe-actions mode-options" role="group" aria-label="${t.globeControl}">
+          <button data-globe-action="audition" aria-pressed="${globeAction === 'audition'}">${t.audition}</button>
+          <button data-globe-action="rotate" aria-pressed="${globeAction === 'rotate'}">${t.rotate}</button>
+        </div>` : ''}
         <figure>
           ${isGlobe && !labPage ? `<div class="globe-stage"><canvas id="globe" tabindex="0" role="group" aria-label="${t.globeHelp}" aria-describedby="globe-help"></canvas></div>` : ''}
-          <div class="map" id="map" ${isGlobe ? 'hidden' : ''} style="--ratio:${dataset.width} / ${dataset.height}">
+          <div class="map" id="map" tabindex="0" aria-label="${t.mapLabel}" aria-describedby="globe-help" ${isGlobe ? 'hidden' : ''} style="--ratio:${dataset.width} / ${dataset.height}">
             <img src="${dataset.image}" alt="${t.mapLabel}" width="${dataset.width}" height="${dataset.height}" draggable="false">
-            <div class="map-overlay" aria-hidden="true">${markers}<span id="scanline" hidden></span><span id="scan-note" hidden></span><span id="crosshair" hidden></span></div>
+            <div class="map-overlay" aria-hidden="true">${markers}<span id="scanline" hidden></span><span id="scan-note" hidden></span><span id="scan-target" hidden></span><span id="crosshair" hidden></span><span id="pointer-laser" hidden></span><span id="pointer-target" hidden></span></div>
           </div>
           <figcaption class="map-caption">
             <span class="palette" aria-label="${t.palette}">
               <span><i class="up" aria-hidden="true">↑</i>${dataset.signs[1][language]}</span>
               <span><i class="down" aria-hidden="true">↓</i>${dataset.signs[-1][language]}</span>
             </span>
-            <span id="globe-help">${isGlobe ? t.globeHelp : t.mapHint}</span>
+            <span id="globe-help">${isGlobe ? t.globeHelp : t.mapHint} ${t.weakAudition}</span>
           </figcaption>
         </figure>
       </section>
@@ -342,7 +368,7 @@ function render() {
           <div class="now-playing">
             <img src="${dataset.image}" alt="">
             <div class="selection">
-              <h1 id="dataset-title" tabindex="-1">${dataset.title[language]}</h1>
+              <h2 id="dataset-title" tabindex="-1">${dataset.title[language]}</h2>
               <strong id="selection"></strong><span id="result"></span>
             </div>
             <span class="status" id="player-status" role="status"></span>
@@ -361,8 +387,12 @@ function render() {
           <button class="secondary" data-view="explore">${t.explore}</button>
         </div>
         ${scanSpeedControl}
+        <div class="scan-route">
+          <button class="secondary" data-auto-scan aria-describedby="scan-route-label">${t.automaticScan}</button>
+          <span id="scan-route-label"></span>
+        </div>
         ${labPage ? `<section class="card lab-readout">
-          <h2>${t.explanation}</h2><p id="live-sample"></p><p>${dataset.mapping[language]}</p>
+          <h2>${t.explanation}</h2><p id="live-sample"></p><p id="live-mapping"></p>
           <p>${t.synthetic}</p>
           <a href="${dataset.source.url}" target="_blank" rel="noopener noreferrer">${t.viewSource} ${icon('arrow')}</a>
         </section>` : ''}
@@ -373,11 +403,11 @@ function render() {
           <button data-mode="data" aria-pressed="${mode === 'data'}">${t.data}</button>
           <button data-mode="ambient" aria-pressed="${mode === 'ambient'}">${t.ambient}</button>
         </div><p id="mode-hint"></p></div>
-        <div class="style-controls mode-options" role="group" aria-label="${t.style}">
-          <span aria-hidden="true">${t.style}</span>
+        <div class="mode"><h3>${t.style}</h3><div class="mode-options style-options" role="group" aria-label="${t.style}" aria-describedby="playback-style-hint">
           <button data-style="motif" aria-pressed="${style === 'motif'}">${t.motif}</button>
           <button data-style="flow" aria-pressed="${style === 'flow'}">${t.flow}</button>
-        </div>
+          <button data-style="rgb" aria-pressed="${style === 'rgb'}">${t.rgb}</button>
+        </div><p id="playback-style-hint"></p></div>
         ${!labPage ? `<section class="player-catalog">
           <h2>${t.explore}</h2><div>${catalog()}</div>
         </section>` : ''}
@@ -390,7 +420,7 @@ function render() {
         <summary>${t.lab}</summary>
         <p id="lab-sample"></p>
         <p id="lab-settings"></p>
-        <h2>${t.explanation}</h2><p>${dataset.mapping[language]}</p><p>${t.synthetic}</p><p id="style-explanation"></p>
+        <h2>${t.explanation}</h2><p id="mapping-explanation"></p><p>${t.synthetic}</p><p id="style-explanation"></p>
         <figure class="playback-art" id="pitch-chart" hidden>
           <figcaption>${t.wave}</figcaption>
           <div id="pitch-pattern" aria-hidden="true"></div>
@@ -407,16 +437,13 @@ function render() {
       ${icon(item.id === 'gedi' ? 'forest' : item.id as 'night' | 'ocean' | 'lightning')}<span>${item.category[language]}</span>
     </button>`).join('')}</div>`;
   const filtered = exploreFilter ? datasets.filter(item => item.id === exploreFilter) : datasets;
-  const explore = `<section class="intro"><h1>${t.explore}</h1></section>
-    <div class="browse"><h2>${t.categories}</h2>${tiles}<h2>${t.datasets}</h2>${entries(filtered)}</div>`;
+  const explore = `<div class="browse"><h2>${t.categories}</h2>${tiles}<h2>${t.datasets}</h2>${entries(filtered)}</div>`;
   const ids = libraryFilter === 'favorites' ? favorites : recents;
   const libraryItems = libraryFilter === 'all' ? datasets : ids.map(id => datasets.find(item => item.id === id)!);
-  const library = `<section class="intro"><h1>${t.library}</h1></section>
-    <div class="filter-chips" role="group" aria-label="${t.library}">${(['all','favorites','recent'] as const).map(filter =>
+  const library = `<div class="filter-chips" role="group" aria-label="${t.library}">${(['all','favorites','recent'] as const).map(filter =>
       `<button data-filter="${filter}" aria-pressed="${filter === libraryFilter}">${t[filter]}</button>`).join('')}</div>
     ${libraryItems.length ? entries(libraryItems) : `<p class="empty-list">${libraryFilter === 'favorites' ? t.noFavorites : t.noRecent}</p>`}`;
-  const about = `<section class="intro"><h1>${t.settings}</h1></section>
-    <section class="card about settings-panel">
+  const about = `<section class="card about settings-panel">
       <label>${t.language}<select id="settings-language"><option value="en" ${language === 'en' ? 'selected' : ''}>English</option><option value="tr" ${language === 'tr' ? 'selected' : ''}>Türkçe</option></select></label>
       <label><input type="checkbox" id="settings-rotation" ${rotation ? 'checked' : ''}>${t.autoRotation}</label>
       <label>${t.motion}<select id="settings-motion">
@@ -424,6 +451,15 @@ function render() {
         <option value="reduce" ${motion === 'reduce' ? 'selected' : ''}>${t.lessMotion}</option>
         <option value="full" ${motion === 'full' ? 'selected' : ''}>${t.fullMotion}</option>
       </select></label>
+    </section>
+    <section class="card about settings-panel" aria-labelledby="playback-settings-title">
+      <h2 id="playback-settings-title">${t.player}</h2>
+      <label><input type="checkbox" id="settings-laser" ${laser ? 'checked' : ''}>${t.laserScan}</label>
+      <label><input type="checkbox" id="settings-stereo" ${stereoPositioning ? 'checked' : ''}>${t.stereoPositioning}</label>
+    </section>
+    <section class="card about settings-panel" aria-labelledby="accessibility-title">
+      <h2 id="accessibility-title">${t.accessibility}</h2>
+      <label><input type="checkbox" id="settings-quick-playback" ${quickPlayback ? 'checked' : ''}>${t.quickPlayback}</label>
     </section>
     <section class="card about settings-panel appearance" aria-labelledby="appearance-title">
       <h2 id="appearance-title">${t.appearance}</h2>
@@ -442,7 +478,7 @@ function render() {
       <p>${t.aboutCopy}</p>
       <p><a href="https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/">NASA Earth Observatory · Blue Marble Next Generation</a> · ${t.globeBackdrop}</p>
       <p>${t.credits
-        .replace('@AmiralG961', '<a href="https://github.com/AmiralG961">@AmiralG961</a>')
+        .replace('@AmiralG975f', '<a href="https://github.com/AmiralG975f">@AmiralG975f</a>')
         .replace('@Yasinoguz01', '<a href="https://github.com/Yasinoguz01">@Yasinoguz01</a>')}</p>
       <a href="https://github.com/grassified/EarthSona" target="_blank" rel="noopener noreferrer">${t.repository} ${icon('arrow')}</a>
       <a href="https://www.spaceappschallenge.org/2026/find-a-team/asteronix-uhret/" target="_blank" rel="noopener noreferrer">${t.teamLink} ${icon('arrow')}</a>
@@ -452,7 +488,7 @@ function render() {
     <a class="skip" href="#main">${t.skip}</a>
     <header class="header">
       <button class="icon-button" id="open-menu" aria-controls="drawer" aria-haspopup="dialog" aria-expanded="false" aria-label="${t.menu}">${icon('menu')}</button>
-      <button class="brand" data-view="studio">EarthSona</button>
+      <h1 class="page-title ${view === 'studio' ? 'player-title' : ''}">${pageTitle}</h1>
       <button class="icon-button" data-view="about" aria-label="${t.settings}">${icon('gear')}</button>
     </header>
     <dialog id="drawer" aria-label="${t.menu}">
@@ -460,6 +496,9 @@ function render() {
       <nav aria-label="${t.nav}">${nav('studio')}${nav('explore')}${nav('lab')}${nav('compose')}${nav('library')}</nav>
     </dialog>
     <div class="shell">
+      <div class="quick-playback" ${quickPlayback ? '' : 'hidden'}>
+        <button class="secondary" data-quick-playback>${t.goToPlayback}</button>
+      </div>
       <main id="main" tabindex="-1" data-page="${view}">${isPlayerView() ? studio : view === 'library' ? library : view === 'explore' ? explore : view === 'compose' ? studioMarkup(piece, step, language, composing, exporting) : about}</main>
       <aside class="mini-player card" id="mini-player" hidden aria-label="${t.nowPlaying}">
         <button class="dataset-button" data-view="studio"><img src="${dataset.image}" alt="">
@@ -474,25 +513,36 @@ function render() {
     if (drawer.isConnected) trigger?.focus();
   });
   const ring = app.querySelector<HTMLCanvasElement>('#audio-ring');
-  disposeRing = ring ? mountAudioRing(ring, () => scanning || status === 'listening' ? player.spectrum() : undefined, reduced) : () => {};
+  const spectrum = ring && mountAudioRing(ring, () => scanning || status === 'listening' ? player.spectrum() : undefined, reduced, () => accent);
+  disposeRing = spectrum ? spectrum.dispose : () => {};
+  syncRing = spectrum ? spectrum.sync : () => {};
   const picker = app.querySelector<HTMLSelectElement>('#studio-format');
   if (picker && [...picker.options].some(option => option.value === format)) picker.value = format;
   const canvas = app.querySelector<HTMLCanvasElement>('#globe');
   if (canvas && dataset.geography) {
-    if (!globeBackdrop && !backdropRequested) {
+    if (dataset.id !== 'night' && !globeBackdrop && !backdropRequested) {
       backdropRequested = true;
-      void readImage(import.meta.env.BASE_URL + 'blue-marble.webp').then(value => { globeBackdrop = value; }).catch(() => {});
+      void readImage(import.meta.env.BASE_URL + 'blue-marble.webp').then(value => { globeBackdrop = value; globe?.wake(); }).catch(() => {});
     }
-    disposeGlobe = mountGlobe(canvas, {
-      view: globeView, bounds: dataset.geography.bounds, frame: () => frame,
-      backdrop: () => globeBackdrop,
-      auto: () => rotation && !reduced(),
-      progress: () => scanning ? {
-        position: scanPosition,
-        sampled: selection?.point.x,
-      } : selection && 'label' in selection && selection.label === 'scanPoint'
-        ? { position: scanPosition } : selection ? { point: selection.point, position: -1 } : undefined,
-      choose: point => { void audition({ label: 'point', point }); },
+    globe = mountGlobe(canvas, {
+      view: globeView, bounds: dataset.geography.bounds, dataset, light: theme === 'light',
+      laser: () => laser, reduced, frame: () => frame,
+      backdrop: () => dataset.id === 'night' ? undefined : globeBackdrop,
+      auto: () => rotation && !reduced() && !pointerSample && !gesture,
+      rotating: () => globeAction === 'rotate',
+      progress: () => {
+        const hover = globeAction === 'audition' ? pointerSample?.point : undefined;
+        const cursor = scanning || isScanSelection();
+        const marker = committedPoint ?? (selection && (!('label' in selection) || selection.label === 'point') ? selection.point : undefined);
+        return {
+          position: cursor ? scanPosition : hover?.x ?? -1,
+          sampled: scanning && signal ? selection?.point : undefined,
+          target: cursor ? scanTarget() : undefined,
+          hover,
+          marker,
+        };
+      },
+      choose: auditionKeyboardPoint,
       fail: () => {
         queueMicrotask(() => {
           if (!canvas.isConnected) return;
@@ -515,6 +565,8 @@ function formatSignal(value: Signal | null) {
 }
 
 function refresh() {
+  syncRing();
+  globe?.wake();
   const t = copy[language];
   const mini = document.getElementById('mini-player')!;
   mini.hidden = isPlayerView() || view === 'compose' || !(scanning || status === 'listening' || status === 'starting');
@@ -532,28 +584,34 @@ function refresh() {
   };
   app.querySelector<HTMLButtonElement>('[data-add-studio]')!.disabled = !signal || !selection;
   set('studio-status', studioStatus);
-  set('mode-hint', style === 'flow'
+  set('mode-hint', style === 'rgb' ? t.rgbModeHint : style === 'flow'
     ? t[mode === 'data' ? 'flowDataHint' : 'flowAmbientHint']
     : t[mode === 'data' ? 'dataHint' : 'ambientHint']);
+  set('playback-style-hint', style === 'flow' ? t.flowStyleHint : style === 'rgb' ? t.rgbStyleHint : t.motifStyleHint);
   const selectedRegion = selection && 'region' in selection ? selection.region : -1;
   const statusText = frameError ? t.assetError : !frame ? t.loading : scanning ? t.scanning : t[status];
   set('player-status', status === 'audioError' && frame && !scanning ? t.stopped : frameError ? t.stopped : statusText);
   set('selection', frameError ? t.assetError : !frame ? t.loading : status === 'audioError' ? t.audioError :
-    selectedRegion >= 0 ? dataset.regions[selectedRegion].name[language] : selection && 'label' in selection ? (scanning && style === 'flow' ? t.flowSource : t[selection.label]) : dataset.regions[0].name[language]);
+    selectedRegion >= 0 ? dataset.regions[selectedRegion].name[language] : selection && 'label' in selection ? (scanning && style === 'flow' ? t.flowSource : t[selection.label === 'direct' ? 'point' : selection.label === 'rowPoint' ? 'scanRowPoint' : selection.label]) : dataset.regions[0].name[language]);
   set('result', status === 'audioError' || !frame ? '' : !selection ? t.choose : (signal?.nearby ? t.nearby + ' · ' : '') + formatSignal(signal) +
     (signal ? ` · ${percent[language].format(signal.coverage)} ${t.coverage}` : ''));
 
   const holding = scanning && style === 'flow' && mode === 'ambient' && signal;
   const sampleLabel = signal ? (holding ? t.heldSample + ' · ' : '') + formatSignal(signal) : t.noSample;
   set('lab-sample', sampleLabel);
-  if (view === 'lab') set('live-sample', sampleLabel);
+  const mapping = style === 'rgb' ? t.rgbStyleHint : dataset.mapping[language];
+  if (view === 'lab') {
+    set('live-sample', sampleLabel);
+    set('live-mapping', mapping);
+  }
+  set('mapping-explanation', mapping);
   set('lab-settings', `${t[mode]} · ${t[style]} · ${t.scanSpeed} ${speedLabel()}`);
   set('scan-speed-value', speedLabel());
   document.getElementById('scan-speed')!.setAttribute('aria-valuetext', speedLabel());
   set('held-status', holding ? t.heldSample : '');
   document.getElementById('held-status')!.hidden = !holding;
   const pitch = document.getElementById('pitch-pattern')!;
-  document.getElementById('pitch-chart')!.hidden = !signal || style === 'flow';
+  document.getElementById('pitch-chart')!.hidden = !signal || style !== 'motif';
   set('style-explanation', style === 'flow' ? t.flowExplanation : '');
   document.getElementById('style-explanation')!.hidden = style !== 'flow';
   pitch.className = signal?.polarity === -1 ? 'falling' : 'rising';
@@ -582,7 +640,10 @@ function refresh() {
   const transport = app.querySelector<HTMLButtonElement>('[data-transport]')!;
   const action = transportActive() ? 'stop' : 'play';
   const label = action === 'stop' ? t.stop : t.playScan;
-  transport.disabled = !frame;
+  const bounds = currentScanBounds();
+  transport.setAttribute('aria-disabled', String(action === 'play' && !bounds));
+  app.querySelector('[data-auto-scan]')!.setAttribute('aria-pressed', String(!committedPoint));
+  set('scan-route-label', committedPoint ? (frame && !bounds ? t.unsupportedRow : t.selectedScanRow) : '');
   if (transport.dataset.action !== action) {
     transport.dataset.action = action;
     transport.innerHTML = icon(action);
@@ -592,16 +653,27 @@ function refresh() {
   for (const button of app.querySelectorAll<HTMLButtonElement>('[data-region-step]')) button.disabled = !frame;
   updatePlayhead();
   const scanNote = document.getElementById('scan-note')!;
-  const columnSelected = selection && 'label' in selection && selection.label === 'scanPoint';
-  scanNote.hidden = !scanning || !columnSelected || !signal;
-  if (columnSelected && selection) scanNote.style.setProperty('--x', `${selection.point.x * 100}%`);
-  app.querySelector<HTMLInputElement>('#scan-position')!.disabled = !frame;
+  const columnSelected = isScanSelection() && !committedPoint;
+  if (dataset.id !== 'gedi') scanNote.hidden = !scanning || !columnSelected || !signal;
+  if (dataset.id !== 'gedi' && columnSelected && selection) {
+    const x = `${selection.point.x * 100}%`;
+    scanNote.style.setProperty('--sample-y', `${selection.point.y * 100}%`);
+    if (scanNote.style.getPropertyValue('--x') !== x) {
+      scanNote.style.setProperty('--x', x);
+      if (laser && scanning && !reduced() && !scanNote.closest('#map')?.hasAttribute('hidden')) {
+        scanNote.getAnimations().forEach(animation => animation.cancel());
+        scanNote.animate([{ scale: '.72', opacity: 1 }, { scale: '1.18', opacity: .75 }], { duration: 260 });
+      }
+    }
+  }
+  app.querySelector<HTMLInputElement>('#scan-position')!.disabled = !bounds;
   const crosshair = document.getElementById('crosshair')!;
-  crosshair.hidden = !selection || selectedRegion >= 0 || scanning || ('label' in selection && selection.label === 'scanPoint');
+  const marker = committedPoint ?? (selection && 'label' in selection && selection.label === 'point' ? selection.point : undefined);
+  crosshair.hidden = !marker;
   crosshair.classList.toggle('nearby', !!signal?.nearby);
-  if (selection) {
-    crosshair.style.setProperty('--x', `${selection.point.x * 100}%`);
-    crosshair.style.setProperty('--y', `${selection.point.y * 100}%`);
+  if (marker) {
+    crosshair.style.setProperty('--x', `${marker.x * 100}%`);
+    crosshair.style.setProperty('--y', `${marker.y * 100}%`);
   }
 }
 
@@ -619,10 +691,12 @@ function stop(nextStatus: Status = 'stopped') {
 }
 
 function releaseMap() {
+  clearPointer();
   const active = gesture;
   if (!active) return;
   gesture = undefined;
-  if (active.map.hasPointerCapture(active.pointer)) active.map.releasePointerCapture(active.pointer);
+  window.clearTimeout(active.timer);
+  if (active.surface.hasPointerCapture(active.pointer)) active.surface.releasePointerCapture(active.pointer);
 }
 
 function stopInteraction(nextStatus?: Status) {
@@ -632,13 +706,19 @@ function stopInteraction(nextStatus?: Status) {
   stop(nextStatus);
 }
 
-function route(next: View) {
-  if (next === view) return;
-  if (gesture || scrub || (view === 'compose' && (composing || status === 'starting'))) stopInteraction('ready');
-  view = next;
-  render();
-  document.getElementById('main')!.focus({ preventScroll: true });
-  window.scrollTo(0, 0);
+function route(next: View, focusTarget?: string) {
+  if (next !== view) {
+    if (gesture || scrub || (next === 'compose' && transportActive()) ||
+        (view === 'compose' && (composing || status === 'starting'))) stopInteraction('ready');
+    view = next;
+    positionAudio();
+    render();
+    window.scrollTo(0, 0);
+  } else if (!focusTarget) {
+    return;
+  }
+  if (focusTarget) app.querySelector<HTMLElement>(focusTarget)?.focus();
+  else document.getElementById('main')!.focus({ preventScroll: true });
 }
 
 function changeDataset(item: Dataset) {
@@ -652,6 +732,7 @@ function changeDataset(item: Dataset) {
     studioStatus = '';
     frameError = false;
     scanPosition = 0;
+    committedPoint = undefined;
     selection = undefined;
     signal = null;
     void prepare(item);
@@ -663,14 +744,25 @@ function changeDataset(item: Dataset) {
   title.scrollIntoView({ block: 'nearest' });
 }
 
-async function audition(next: Selection, short = false) {
+function positionAudio(point?: Point, screenX?: number) {
+  if (!point || !stereoPositioning || !isPlayerView()) {
+    player.setPosition(0);
+    return;
+  }
+  const spatial = globe?.spatial(point);
+  player.setPosition(screenX ?? (globe ? spatial?.x ?? 0 : view === 'studio' ? point.x * 2 - 1 : 0), screenX === undefined ? spatial?.z : 0);
+}
+
+async function audition(next: Selection, short = false, screenX?: number, directSignal?: Signal | null, directRgb?: Rgb) {
   if (!frame) return;
   stop('ready');
   const request = playbackRequest;
   studioStatus = '';
   selection = next;
   preview = short;
-  signal = sample(frame, dataset, next.point, 'label' in next && next.label === 'scanPoint');
+  signal = directSignal === undefined
+    ? sample(frame, dataset, next.point, 'label' in next && next.label === 'scanPoint')
+    : directSignal;
   if (signal) status = 'starting';
   refresh();
   if (!signal) return;
@@ -681,8 +773,14 @@ async function audition(next: Selection, short = false) {
       status = 'ready';
       refresh();
     };
-    if (style === 'flow') player.startFlow(mode, dataset.flowRegister ?? 0, false, preview, signal, onEnd);
-    else player.play(signal, mode, onEnd, preview);
+    positionAudio(next.point, screenX);
+    if (style === 'flow') player.startFlow(mode, dataset.flowRegister ?? 0, preview, signal, onEnd);
+    else {
+      const rgb = style === 'rgb'
+        ? directRgb ?? sampleRgb(frame!, next.point, 'label' in next && next.label === 'scanPoint', signal.nearby)
+        : undefined;
+      player.play(signal, mode, onEnd, preview, rgb);
+    }
     status = 'listening';
     recordPlayback();
   } catch {
@@ -692,20 +790,56 @@ async function audition(next: Selection, short = false) {
   refresh();
 }
 
+function isScanSelection() {
+  return selection && 'label' in selection && (selection.label === 'scanPoint' || selection.label === 'rowPoint');
+}
+
+function scanTarget() {
+  return committedPoint && { x: scanPosition, y: committedPoint.y };
+}
+
 function updatePlayhead() {
   const slider = app.querySelector<HTMLInputElement>('#scan-position')!;
   if (!slider) return;
   slider.value = String(Math.round(scanPosition * 1000));
   const progress = `${Math.round(scanPosition * 100)}%`;
-  slider.setAttribute('aria-valuetext', progress);
-  document.getElementById('scan-progress-value')!.textContent = progress;
+  if (slider.getAttribute('aria-valuetext') !== progress) {
+    slider.setAttribute('aria-valuetext', progress);
+    document.getElementById('scan-progress-value')!.textContent = progress;
+  }
   const line = document.getElementById('scanline')!;
-  line.hidden = !scanning && !(selection && 'label' in selection && selection.label === 'scanPoint');
+  line.hidden = !scanning && !isScanSelection();
   line.style.setProperty('--x', `${scanPosition * 100}%`);
+  if (dataset.id === 'gedi') {
+    const note = document.getElementById('scan-note')!;
+    const sampled = scanning && frame && !committedPoint && selection && signal &&
+      Math.abs(selection.point.x - scanPosition) <= 1 / frame.width ? selection.point : undefined;
+    note.hidden = !sampled;
+    if (sampled) {
+      note.style.setProperty('--x', `${scanPosition * 100}%`);
+      note.style.setProperty('--sample-y', `${sampled.y * 100}%`);
+    }
+  }
+  const target = document.getElementById('scan-target')!;
+  target.hidden = line.hidden || !committedPoint;
+  if (!target.hidden && committedPoint) {
+    target.style.setProperty('--x', `${scanPosition * 100}%`);
+    target.style.setProperty('--y', `${committedPoint.y * 100}%`);
+  }
 }
 
-async function startScan() {
-  if (!frame) return;
+function currentScanBounds() {
+  return frame && scanBounds(frame, dataset, committedPoint?.y);
+}
+
+async function startScan(fromPlay = false) {
+  const source = frame;
+  const bounds = currentScanBounds();
+  if (!source || !bounds) {
+    stop('ready');
+    refresh();
+    return;
+  }
   stop('ready');
   const request = playbackRequest;
   status = 'starting';
@@ -725,40 +859,51 @@ async function startScan() {
   selection = undefined;
   signal = null;
   preview = true;
-  if (style === 'flow') player.startFlow(mode, dataset.flowRegister ?? 0, true, false);
+  positionAudio();
+  player.startScan(style, mode, dataset.flowRegister ?? 0);
+  const row = committedPoint?.y;
+  const samples = row === undefined ? columns : scanRow(source, dataset, row);
+  const label = row === undefined ? 'scanPoint' : 'rowPoint';
+  if (fromPlay && committedPoint) scanPosition = committedPoint.x;
+  const receive = (point: Point, next: Signal) => {
+    selection = { label, point };
+    signal = next;
+    if (recents[0] !== dataset.id) {
+      recordPlayback();
+      if (view === 'library') render();
+    }
+    positionAudio(point);
+    player.updateScan(next, style === 'rgb' ? sampleRgb(source, point, row === undefined) : undefined);
+  };
+  const width = source.width;
+  const start = Math.round(bounds.start * width);
+  const span = Math.round(bounds.end * width) - start;
+  scanPosition = Math.max(bounds.start, Math.min((start + span - .5) / width, scanPosition));
+  let index = Math.floor(scanPosition * width) - start;
+  const first = samples[start + index++];
+  if (first) receive(row === undefined ? first.point : { x: scanPosition, y: row }, first.signal);
   let previous = performance.now();
-  let nextNote = previous;
-  let index = Math.min(columns.length - 1, Math.floor(scanPosition * columns.length));
-  let candidate: { index: number; signal: Signal } | undefined;
+  let nextReadout = previous;
   const tick = (now: number) => {
     if (request !== playbackRequest) return;
     const position = scanPosition + Math.max(0, Math.min(100, now - previous)) * scanSpeed / 14000;
     previous = now;
-    const end = Math.floor(position * columns.length);
-    for (; index <= end; index++) {
-      const x = index % columns.length;
-      if (x === 0) candidate = undefined;
-      const detected = columns[x];
-      if (detected && (!candidate || detected.coverage > candidate.signal.coverage)) {
-        candidate = { index: x, signal: detected };
-      }
+    const end = Math.floor(position * width) - start;
+    let latest: NonNullable<(typeof samples)[number]> | undefined;
+    for (index = Math.max(index, end - span + 1); index <= end; index++) {
+      latest = samples[start + index % span] ?? latest;
     }
-    if (position >= 1) index -= columns.length;
-    scanPosition = position % 1;
+    const wraps = Math.floor(end / span);
+    index -= wraps * span;
+    scanPosition = position - wraps * span / width;
+    if (latest) receive(latest.point, latest.signal);
+    if (globe && selection) positionAudio(selection.point);
+    globe?.wake();
     updatePlayhead();
-    if (now >= nextNote && candidate) {
-      const x = (candidate.index + .5) / columns.length;
-      selection = { label: 'scanPoint', point: { x, y: .5 } };
-      signal = candidate.signal;
-      if (recents[0] !== dataset.id) {
-        recordPlayback();
-        if (view === 'library') render();
-      }
-      if (style === 'flow') player.updateFlow(signal);
-      else player.play(signal, mode, undefined, true);
-      nextNote = now + dragInterval[mode];
-      candidate = undefined;
+    // Update the readout independently of the incoming audio samples.
+    if (now >= nextReadout) {
       refresh();
+      nextReadout = now + 120;
     }
     scanFrame = requestAnimationFrame(tick);
   };
@@ -767,12 +912,21 @@ async function startScan() {
 }
 
 function scrubPosition(position: number, immediate = false) {
+  const bounds = currentScanBounds();
+  if (!frame || !bounds) return;
+  if (dataset.id === 'gedi') position = Math.max(bounds.start, Math.min(bounds.end - .5 / frame.width, position));
   scanPosition = position;
   const now = performance.now();
   const delay = dragInterval[mode] - (now - lastScrub);
   if (immediate || delay <= 0) {
     lastScrub = now;
-    void audition({ label: 'scanPoint', point: { x: position, y: .5 } }, true);
+    const column = columns[Math.min(columns.length - 1, Math.floor(position * columns.length))];
+    if (frame && committedPoint) {
+      const point = { x: position, y: committedPoint.y };
+      void audition({ label: 'rowPoint', point }, true, undefined, sampleAudition(frame, dataset, point));
+    } else {
+      void audition({ label: 'scanPoint', point: { x: position, y: column?.point.y ?? .5 } }, true);
+    }
   } else {
     updatePlayhead();
     window.clearTimeout(scrubTimer);
@@ -781,17 +935,66 @@ function scrubPosition(position: number, immediate = false) {
   }
 }
 
-function auditionPointer(event: PointerEvent, map: HTMLElement, preview: boolean) {
-  const bounds = map.getBoundingClientRect();
-  const clamp = (value: number) => Math.min(1, Math.max(0, value));
-  void audition({ label: 'point', point: {
-    x: clamp((event.clientX - bounds.left) / bounds.width),
-    y: clamp((event.clientY - bounds.top) / bounds.height),
-  } }, preview);
+function pickPointer(event: PointerEvent, surface: HTMLElement): PointerSample | null {
+  if (surface.id === 'globe') return globe?.pick(event.clientX, event.clientY) ?? null;
+  const box = surface.getBoundingClientRect();
+  const x = (event.clientX - box.left) / box.width;
+  const y = (event.clientY - box.top) / box.height;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { point: { x, y }, screenX: x * 2 - 1 } : null;
+}
+
+function paintPointer() {
+  pointerFrame = 0;
+  const beam = app.querySelector<HTMLElement>('#pointer-laser');
+  const target = app.querySelector<HTMLElement>('#pointer-target');
+  if (!beam || !target) return;
+  beam.hidden = target.hidden = !pointerSample || !!globe;
+  if (!pointerSample || globe) return;
+  const { x, y } = pointerSample.point;
+  beam.style.setProperty('--x', `${x * 100}%`);
+  target.style.setProperty('--x', `${x * 100}%`);
+  target.style.setProperty('--y', `${y * 100}%`);
+}
+
+function clearPointer() {
+  pointerSample = null;
+  cancelAnimationFrame(pointerFrame);
+  paintPointer();
+  globe?.wake();
+}
+
+function trackPointer(event: PointerEvent, surface: HTMLElement) {
+  pointerSample = pickPointer(event, surface);
+  if (globe) globe.wake();
+  else if (!pointerFrame) pointerFrame = requestAnimationFrame(paintPointer);
+}
+
+function updateAudition(active: NonNullable<typeof gesture>) {
+  active.timer = 0;
+  if (gesture !== active || !frame) return;
+  const picked = pointerSample;
+  const next = picked && sampleAudition(frame, dataset, picked.point);
+  const rgb = style === 'rgb' && picked && next ? sampleRgb(frame, picked.point, false) : undefined;
+  const channels = rgb ? [rgb.red, rgb.green, rgb.blue].map(value => Math.floor(value * 60)).join(':') : '';
+  const key = next ? `${next.polarity}:${Math.round(next.coverage * 100)}:${!!next.weak}:${channels}` : 'silent';
+  active.nextAt = performance.now() + (mode === 'ambient' ? 175 : 120);
+  if (key === active.lastKey && status === 'listening') return;
+  active.lastKey = key;
+  if (picked) {
+    if (next) active.lastAudition = picked.point;
+    void audition({ label: 'direct', point: picked.point }, true, picked.screenX, next, rgb);
+  }
+  else {
+    stop('ready');
+    selection = undefined;
+    signal = null;
+    refresh();
+  }
 }
 
 app.addEventListener('pointerdown', event => {
   if ((event.target as Element).id === 'scan-position' && event.isPrimary && event.button === 0 && !gesture) {
+    clearPointer();
     canceledScrub = undefined;
     scrub = { pointer: event.pointerId, resume: scanning };
     stop('ready');
@@ -799,22 +1002,55 @@ app.addEventListener('pointerdown', event => {
     refresh();
     return;
   }
-  const map = (event.target as Element).closest<HTMLElement>('#map');
-  if (!map || !frame || gesture || event.button !== 0 || !event.isPrimary) return;
+  const surface = (event.target as Element).closest<HTMLElement>('#map, #globe');
+  if (!surface || !frame || gesture || event.button !== 0 || !event.isPrimary) return;
+  if (surface.id === 'globe' && globeAction === 'rotate') {
+    clearPointer();
+    return;
+  }
+  trackPointer(event, surface);
+  if (!pointerSample) return;
+  const resume = scanning || !!resumeTimer || !!scrub?.resume;
   scrub = undefined;
-  map.setPointerCapture(event.pointerId);
-  gesture = { map, pointer: event.pointerId, x: event.clientX, y: event.clientY, sampledAt: event.timeStamp };
-  auditionPointer(event, map, false);
+  surface.setPointerCapture(event.pointerId);
+  gesture = {
+    surface, pointer: event.pointerId, resume, nextAt: 0, timer: 0,
+    originX: event.clientX, originY: event.clientY, dragged: false, origin: pointerSample.point,
+  };
+  updateAudition(gesture);
 });
 
 app.addEventListener('pointermove', event => {
-  if (gesture?.pointer !== event.pointerId) return;
-  if (event.timeStamp - gesture.sampledAt < dragInterval[mode]) return;
-  if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < 4) return;
-  gesture.x = event.clientX;
-  gesture.y = event.clientY;
-  gesture.sampledAt = event.timeStamp;
-  auditionPointer(event, gesture.map, true);
+  if (!event.isPrimary || (gesture && gesture.pointer !== event.pointerId)) return;
+  const surface = gesture?.surface ?? (event.target as Element).closest<HTMLElement>('#map, #globe');
+  if (!surface || (!gesture && event.pointerType === 'touch')) return;
+  if (surface.id === 'globe' && globeAction === 'rotate') return;
+  trackPointer(event, surface);
+  const active = gesture;
+  if (!active) return;
+  active.dragged ||= Math.hypot(event.clientX - active.originX, event.clientY - active.originY) > 5;
+  if (active.timer) return;
+  const delay = active.nextAt - performance.now();
+  if (delay <= 0) updateAudition(active);
+  else active.timer = window.setTimeout(() => updateAudition(active), delay);
+});
+
+app.addEventListener('pointerout', event => {
+  const surface = (event.target as Element).closest('#map, #globe');
+  if (!gesture && surface && !(event.relatedTarget instanceof Node && surface.contains(event.relatedTarget))) clearPointer();
+});
+
+function auditionKeyboardPoint(point: Point, screenX: number) {
+  if (!frame) return;
+  stopInteraction('ready');
+  committedPoint = point;
+  void audition({ label: 'point', point }, true, screenX, sampleAudition(frame, dataset, point));
+}
+
+app.addEventListener('keydown', event => {
+  if ((event.target as HTMLElement).id !== 'map' || !['Enter', ' '].includes(event.key) || event.repeat) return;
+  event.preventDefault();
+  auditionKeyboardPoint({ x: .5, y: .5 }, 0);
 });
 
 window.addEventListener('pointerup', event => {
@@ -829,7 +1065,21 @@ window.addEventListener('pointerup', event => {
     refresh();
   }
   if (gesture?.pointer !== event.pointerId) return;
-  releaseMap();
+  const { resume, dragged, lastAudition, origin } = gesture;
+  const point = dragged ? lastAudition : origin;
+  if (point) {
+    committedPoint = point;
+    scanPosition = point.x;
+  }
+  if (!dragged) {
+    releaseMap();
+    // Let a tap finish its preview before restoring the scan.
+    if (resume) resumeTimer = window.setTimeout(() => { void startScan(); }, mode === 'ambient' ? 640 : 320);
+    refresh();
+    return;
+  }
+  stopInteraction();
+  if (resume) resumeTimer = window.setTimeout(() => { void startScan(); }, dragInterval[mode]);
   refresh();
 });
 
@@ -845,7 +1095,10 @@ window.addEventListener('pointercancel', event => {
 });
 app.addEventListener('lostpointercapture', cancelPointer);
 window.addEventListener('blur', () => {
-  if (!gesture && !scrub && !resumeTimer) return;
+  if (!gesture && !scrub && !resumeTimer) {
+    clearPointer();
+    return;
+  }
   stopInteraction();
   refresh();
 });
@@ -864,6 +1117,8 @@ app.addEventListener('click', event => {
     drawer.showModal();
     button.setAttribute('aria-expanded', 'true');
     (drawer.querySelector<HTMLElement>('[aria-current]') ?? drawer.querySelector('button'))?.focus();
+  } else if (button.hasAttribute('data-quick-playback')) {
+    route('studio', '[data-transport]');
   } else if (button.hasAttribute('data-close-menu')) {
     drawer.close();
   } else if (button.dataset.category) {
@@ -878,6 +1133,14 @@ app.addEventListener('click', event => {
   } else if (button.dataset.accent || button.hasAttribute('data-reset-accent')) {
     accent = validAccent(button.dataset.accent ?? defaultAccent);
     updateAppearance();
+  } else if (button.hasAttribute('data-auto-scan') && committedPoint) {
+    const resume = scanning || !!resumeTimer || !!scrub?.resume || !!gesture?.resume;
+    stopInteraction('ready');
+    committedPoint = undefined;
+    selection = undefined;
+    signal = null;
+    if (resume) void startScan();
+    else refresh();
   } else if (button.hasAttribute('data-normal-speed')) {
     updateSpeed(1);
   } else if (button.hasAttribute('data-add-studio')) {
@@ -916,6 +1179,14 @@ app.addEventListener('click', event => {
     try { localStorage.setItem('earthsona-language', language); } catch { /* optional storage */ }
     render();
     app.querySelector<HTMLButtonElement>(`[data-lang="${language}"]`)?.focus();
+  } else if (button.dataset.globeAction) {
+    globeAction = button.dataset.globeAction === 'rotate' ? 'rotate' : 'audition';
+    if (gesture) stopInteraction('ready');
+    else clearPointer();
+    for (const control of app.querySelectorAll<HTMLButtonElement>('[data-globe-action]')) {
+      control.setAttribute('aria-pressed', String(control.dataset.globeAction === globeAction));
+    }
+    refresh();
   } else if (button.dataset.display) {
     flat = button.dataset.display === 'flat';
     render();
@@ -949,15 +1220,16 @@ app.addEventListener('click', event => {
       globeView.longitude = (bounds.west + point.x * (bounds.east - bounds.west)) * radians;
       globeView.latitude = (bounds.north - point.y * (bounds.north - bounds.south)) * radians;
     }
-    void audition({ region, point: dataset.regions[region].point });
+    void audition({ region, point }, false, globe ? 0 : undefined);
   } else if (button.hasAttribute('data-transport')) {
+    if (button.getAttribute('aria-disabled') === 'true') return;
     if (transportActive()) {
       stopInteraction();
       refresh();
     } else {
       releaseMap();
       scrub = undefined;
-      void startScan();
+      void startScan(true);
     }
   } else if (button.hasAttribute('data-stop')) {
     stopInteraction();
@@ -966,6 +1238,7 @@ app.addEventListener('click', event => {
   } else if (button.dataset.style && style !== button.dataset.style) {
     stopInteraction('ready');
     style = button.dataset.style as Style;
+    savePreference(styleKey, style);
     selection = undefined;
     signal = null;
     for (const control of app.querySelectorAll<HTMLButtonElement>('[data-style]')) {
@@ -1007,9 +1280,20 @@ app.addEventListener('change', event => {
     savePreference('earthsona-language', language);
     render();
     document.getElementById(input.id)?.focus();
+  } else if (input.id === 'settings-laser') {
+    laser = input.checked;
+    savePreference('earthsona-scan-appearance', laser ? 'laser' : 'classic');
+  } else if (input.id === 'settings-stereo') {
+    stereoPositioning = input.checked;
+    savePreference('earthsona-stereo-positioning', stereoPositioning ? 'on' : 'off');
+    positionAudio();
   } else if (input.id === 'settings-rotation') {
     rotation = input.checked;
     savePreference('earthsona-rotation', rotation ? 'on' : 'off');
+  } else if (input.id === 'settings-quick-playback') {
+    quickPlayback = input.checked;
+    savePreference('earthsona-quick-playback', quickPlayback ? 'on' : 'off');
+    app.querySelector<HTMLElement>('.quick-playback')!.hidden = !quickPlayback;
   } else if (input.id === 'settings-motion') {
     motion = input.value;
     savePreference('earthsona-motion', motion);
@@ -1064,7 +1348,7 @@ app.addEventListener('input', event => {
 
 document.addEventListener('keydown', event => {
   if (app.querySelector<HTMLDialogElement>('#drawer')?.open) return;
-  if (event.key !== 'Escape' || (!scanning && !gesture && !scrub && !scrubTimer && !resumeTimer && status !== 'listening' && status !== 'starting')) return;
+  if (event.key !== 'Escape' || (!pointerSample && !scanning && !gesture && !scrub && !scrubTimer && !resumeTimer && status !== 'listening' && status !== 'starting')) return;
   stopInteraction();
   refresh();
 });

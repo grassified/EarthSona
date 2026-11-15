@@ -4,7 +4,7 @@ export type Language = 'en' | 'tr';
 export type Localized = Record<Language, string>;
 export type Point = { x: number; y: number };
 export type Polarity = -1 | 1;
-export type Signal = { polarity: Polarity | 0; coverage: number; nearby?: boolean };
+export type Signal = { polarity: Polarity | 0; coverage: number; nearby?: boolean; weak?: boolean };
 type RgbClassifier = (red: number, green: number, blue: number) => Polarity | 0;
 
 export interface Dataset {

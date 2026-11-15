@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { arrange, FlowSequence } from '../src/arrangement.ts';
+import { arrange, FlowSequence, ScanSequence } from '../src/arrangement.ts';
 
 const up = { polarity: 1, coverage: .12 };
 const down = { ...up, polarity: -1 };
@@ -18,26 +18,29 @@ test('Flow keeps opposite contours and arranges them into phrases with rests', (
   assert.equal(arrange(up, 'ambient', -5, 1).events.length, 2);
 });
 
-test('scheduling uses a bounded horizon and dropping the sequence clears pending audio', () => {
-  const sequence = new FlowSequence(.04, 'ambient', 0, true, false);
+test('one-shot Flow uses a bounded horizon and skips late gestures after a stall', () => {
+  const sequence = new FlowSequence(.04, up, 'ambient', 0, false);
   const times = [];
-  const record = (_, at) => times.push(at);
-  sequence.update(up, 0);
-  sequence.advance(0, record);
-  assert.equal(times.length, 1);
-  assert.ok(times[0] <= .12);
-  sequence.clear();
-  sequence.advance(.1, record);
-  sequence.advance(.55, record);
-  assert.equal(times.length, 1);
+  assert.equal(sequence.advance(0, (_, at) => times.push(at)), false);
+  assert.deepEqual(times, [.04]);
+  assert.equal(sequence.advance(8, () => assert.fail('stale event')), true);
 });
 
-test('a timer stall and stale input cannot produce a burst on resume', () => {
-  const sequence = new FlowSequence(.04, 'ambient', 0, true, false);
-  sequence.update(up, 0);
-  sequence.advance(0, () => {});
-  sequence.update(down, .1);
-  sequence.advance(8, () => assert.fail('stale event'));
-  sequence.update(down, 8);
-  sequence.advance(8, (_, at) => assert.ok(at >= 8 && at <= 8.12));
+test('the next scan note uses the newest sample, with no catch-up burst after a stall', () => {
+  const sequence = new ScanSequence();
+  const heard = [];
+  const record = ({ signal }, at, step) => {
+    heard.push([signal, at, step]);
+    return .25;
+  };
+  sequence.update({ signal: up }, 0);
+  sequence.advance(0, record);
+  sequence.update({ signal: { ...up, coverage: .14 } }, .1);
+  sequence.update({ signal: { ...up, coverage: .31 } }, .24);
+  sequence.advance(.24, record);
+  assert.deepEqual(heard, [[up, .025, 0], [{ ...up, coverage: .31 }, .275, 1]]);
+  sequence.advance(5, () => assert.fail('stale event'));
+  sequence.update({ signal: down }, 5);
+  sequence.advance(5, record);
+  assert.deepEqual(heard[2], [down, 5.025, 0]);
 });

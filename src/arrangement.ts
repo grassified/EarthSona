@@ -1,7 +1,29 @@
 import type { Signal } from './datasets';
-import type { Mode } from './audio';
+import type { Rgb } from './sampling';
 
-export type Style = 'motif' | 'flow';
+export type Mode = 'data' | 'ambient';
+
+export function motif(signal: Signal, mode: Mode, preview = false) {
+  const ambient = mode === 'ambient';
+  const step = 3 + Math.min(4, Math.floor(signal.coverage * 30));
+  const expanded = ambient && !preview;
+  const pitches = signal.polarity === 0
+    ? (expanded ? [0, step, 0, -step, 0] : [0, step, 0, -step])
+    : (expanded ? [0, step / 2, step, step * 1.5, step * 2] : [0, step, step * 2]);
+  if (signal.polarity < 0) pitches.reverse();
+  return {
+    frequencies: pitches.map(pitch => (ambient ? 262 : 392) * 2 ** (pitch / 12)),
+    spacing: preview ? (ambient ? .14 : .073) : (ambient ? .43 : .19),
+    sustain: preview ? (ambient ? .21 : .062) : (ambient ? 1.08 : .155),
+    attack: preview ? (ambient ? .035 : .01) : (ambient ? .24 : .016),
+    release: preview ? (ambient ? .12 : .038) : (ambient ? .65 : .11),
+    level: (ambient ? .1 : .19) * (signal.weak ? .42 : 1),
+  };
+}
+
+export type Style = 'motif' | 'flow' | 'rgb';
+export const scanExpiry = .55;
+
 export type FlowEvent = {
   offset: number;
   duration: number;
@@ -21,7 +43,7 @@ export function arrange(signal: Signal, mode: Mode, register: number, variation:
   const contour = signal.polarity === 0 ? [0, interval, 0, -interval] : [0, interval, 2 * interval];
   if (signal.polarity === -1) contour.reverse();
   const phrase = (offset: number, duration: number, steps: number[], level: number): FlowEvent => ({
-    offset, duration, lane: 0, pitches: steps.map(hz), level,
+    offset, duration, lane: 0, pitches: steps.map(hz), level: level * (signal.weak ? .42 : 1),
     attack: ambient ? .09 : .018, release: ambient ? .22 : .075,
   });
   if (preview) {
@@ -45,56 +67,50 @@ export function arrange(signal: Signal, mode: Mode, register: number, variation:
   return { length: 2.9, events };
 }
 
-/** A scan supplies a fresh target window. Only the latest window is retained. */
 export class FlowSequence {
-  private pending: FlowEvent[] = [];
-  private phraseAt: number;
-  private target?: { signal: Signal; time: number };
-  private variation = 0;
-  private previousPolarity?: Signal['polarity'];
+  private pending: FlowEvent[];
+  private end: number;
 
-  private readonly mode: Mode;
-  private readonly register: number;
-  private readonly repeat: boolean;
-  private readonly preview: boolean;
-
-  constructor(start: number, mode: Mode, register: number, repeat: boolean, preview: boolean) {
-    this.phraseAt = start;
-    this.mode = mode;
-    this.register = register;
-    this.repeat = repeat;
-    this.preview = preview;
-  }
-
-  update(signal: Signal, now: number) {
-    this.target = { signal, time: now };
-  }
-
-  clear() {
-    this.target = undefined;
-    this.pending = [];
+  constructor(start: number, signal: Signal, mode: Mode, register: number, preview: boolean) {
+    const phrase = arrange(signal, mode, register, 0, preview);
+    this.pending = phrase.events.map(event => ({ ...event, offset: start + event.offset }));
+    this.end = start + phrase.length;
   }
 
   advance(now: number, schedule: (event: FlowEvent, at: number) => void) {
-    const horizon = now + .12;
-    if (this.phraseAt <= horizon && this.target) {
-      const { signal, time } = this.target;
-      this.target = undefined;
-      if (now - time < 1.2) {
-        if (this.repeat && signal.polarity !== this.previousPolarity) this.variation = 0;
-        const phrase = arrange(signal, this.mode, this.register, this.variation++, this.preview);
-        this.previousPolarity = signal.polarity;
-        this.phraseAt = Math.max(now + .015, this.phraseAt);
-        const start = this.phraseAt;
-        this.pending = phrase.events.map(event => ({ ...event, offset: start + event.offset }));
-        this.phraseAt += phrase.length;
-      }
-    }
-    while (this.pending.length && this.pending[0].offset <= horizon) {
+    while (this.pending.length && this.pending[0].offset <= now + .12) {
       const event = this.pending.shift()!;
-      // Timer stalls skip late events instead of dumping a burst on resume.
       if (event.offset >= now - .03) schedule(event, Math.max(now, event.offset));
     }
-    return !this.repeat && !this.pending.length && this.phraseAt <= now;
+    return !this.pending.length && this.end <= now;
+  }
+}
+
+export type ScanInput = { signal: Signal; rgb?: Rgb };
+
+export class ScanSequence {
+  private latest?: ScanInput & { time: number };
+  private next = 0;
+  private step = 0;
+  private polarity?: Signal['polarity'];
+
+  update(input: ScanInput, now: number) {
+    const restart = !this.latest || now - this.latest.time >= scanExpiry;
+    if (restart) {
+      this.next = now + .025;
+      this.step = 0;
+      this.polarity = undefined;
+    }
+    this.latest = { ...input, time: now };
+    return restart;
+  }
+
+  advance(now: number, schedule: (input: ScanInput, at: number, step: number) => number) {
+    if (!this.latest || this.next > now + .045) return;
+    const at = Math.max(this.next, now + .009);
+    if (at - this.latest.time >= scanExpiry) return;
+    if (this.polarity !== this.latest.signal.polarity) this.step = 0;
+    this.polarity = this.latest.signal.polarity;
+    this.next = at + schedule(this.latest, at, this.step++);
   }
 }

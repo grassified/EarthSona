@@ -1,6 +1,7 @@
-export const defaultAccent = '#92d5e7';
+export const defaultAccent = '#4169e1';
 export const accents = {
-  ice: defaultAccent,
+  royal: defaultAccent,
+  ice: '#92d5e7',
   violet: '#b5a4f5',
   mint: '#79d8ae',
   amber: '#f1bc71',
@@ -30,8 +31,7 @@ export function applyAppearance(root: HTMLElement, theme: Theme, accent: string)
   root.style.setProperty('--chosen-accent', accent);
   root.style.setProperty('--on-accent', ink);
   // Keep custom accents readable on each theme's control surfaces.
-  root.toggleAttribute('data-custom-accent', accent !== defaultAccent);
-  root.style.setProperty('--accent-text', theme !== 'light' && accent === defaultAccent ? defaultAccent : theme === 'light'
+  root.style.setProperty('--accent-text', theme === 'light'
     ? `color-mix(in srgb, ${accent} 25%, #152338)`
     : `color-mix(in srgb, ${accent} 34%, #ffffff)`);
 }
