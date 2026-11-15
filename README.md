@@ -2,7 +2,7 @@
 
 EarthSona is an open-source, responsive web app by **Asteronix**, a team within **UHRET (Hackathon, Robotik ve Elektronik Topluluğu)**. It began with *The Earth Information Jukebox* challenge at the 2026 NASA Space Apps Challenge.
 
-Choose a NASA Earth visualization, then select a region or scan across the image. EarthSona counts pixels that match the dataset's color rules in a patch or scan column. The categories determine whether pitches rise or fall, and the proportion of matching pixels affects the pitch interval. **Motif** plays short phrases. **Flow** arranges successive samples into phrases or sustained accompaniment. Pitch, harmony, and timing are musical choices, and the percentages describe the bundled image pixels.
+Choose a NASA Earth visualization, then select a region or scan across the image. EarthSona counts pixels that match the dataset's color rules in a patch or scan column. The categories determine whether pitches rise or fall, and the proportion of matching pixels affects the pitch interval. **Motif** plays short phrases. **Flow** connects successive samples into evolving phrases, with a quiet harmonic bed in Ambient. **RGB Chords** plays three simultaneous voices from the original image’s blue, green, and red channels in the low, middle, and high registers. Pitch, harmony, and timing are musical choices, and the percentages describe the bundled image pixels.
 
 <p><a href="docs/screenshots/iss-lightning-globe.webp"><img src="docs/screenshots/iss-lightning-globe.webp" width="900" alt="ISS Lightning displayed on the globe beside the Player controls"></a><br><em>ISS Lightning on the globe</em></p>
 
@@ -32,10 +32,10 @@ The build runs `npm run check` before Vite. The production preview usually runs 
 ## Explore and make music
 
 - **Explore** browses the dataset catalog. **Library** brings together the catalog, favorites, and recently played datasets.
-- **Player** lets you audition a region, tap or drag on the map, or run a looping scan. Use **Play/Stop** or **Escape** to stop active playback. Drag the scan-position slider or use its arrow keys to audition a column. The same scan speed is used in **Player** and **Lab**, from 0.25× to 5× with a 1× reset.
+- **Player** lets you audition a region, tap or drag on the map, or run a looping scan. Use **Play/Stop** or **Escape** to stop active playback. Choose **Automatic scan** to sweep full columns. Selecting a map point locks playback to its row or latitude and starts the loop at that point. The scan-position slider and its arrow keys audition another position on the active route. The same scan speed is used in **Player** and **Lab**, from 0.25× to 5× with a 1× reset.
 - **Lab** exposes the mapping, pixel coverage, and current sample. Try **Data Listening** for a clear pitch contour and **Ambient** with **Flow** to hear the scan arranged continuously.
 - **Studio** turns a sampled phrase into an editable 16-step loop. Set the pitches and tempo, preview the loop, then export **WAV** (16-bit PCM, mono, 48 kHz) or **WebM / Opus** when the browser offers that format.
-- **Settings** offers English and Turkish, Light, Dark, and Black themes, custom accents, and globe rotation and motion controls. Preferences, favorites, recents, and the Studio composition live in browser storage.
+- **Settings** offers English and Turkish, Light, Charcoal Black Dark, and Black (AMOLED) themes with subtle static stars, Royal Blue as the default accent, custom accents, and globe rotation and motion controls. Preferences, favorites, recents, and the Studio composition live in browser storage.
 
 | Dataset | What the sound follows | Display |
 | --- | --- | --- |

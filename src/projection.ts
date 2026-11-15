@@ -22,3 +22,22 @@ export function mapPoint(location: { longitude: number; latitude: number }, boun
   const y = (bounds.north - location.latitude) / (bounds.north - bounds.south);
   return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
 }
+
+// Signed depth is positive on the near hemisphere.
+export function globePosition(point: { x: number; y: number }, bounds: Bounds, view: GlobeView) {
+  const latitude = (bounds.north - point.y * (bounds.north - bounds.south)) * radians;
+  const longitude = (bounds.west + point.x * (bounds.east - bounds.west)) * radians - view.longitude;
+  const sin = Math.sin(view.latitude), cos = Math.cos(view.latitude);
+  const toward = Math.cos(latitude) * Math.cos(longitude);
+  return {
+    x: Math.cos(latitude) * Math.sin(longitude),
+    y: Math.sin(latitude) * cos - toward * sin,
+    z: Math.sin(latitude) * sin + toward * cos,
+  };
+}
+
+
+export function screenPoint(point: { x: number; y: number }, bounds: Bounds, view: GlobeView) {
+  const projected = globePosition(point, bounds, view);
+  return projected.z >= 0 ? projected : undefined;
+}

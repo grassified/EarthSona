@@ -32,7 +32,7 @@ export function studioMarkup(piece: Composition, selected: number, language: Lan
   const note = piece.notes.find(item => item.step === selected);
   const source = sourceName(note, language);
   const format = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm;codecs=opus');
-  return `<section class="intro"><h1>${tr ? 'Stüdyo' : 'Studio'}</h1>
+  return `<section class="intro">
     <p>${tr ? 'Bir adım seç ve nota ekle. Düzenleme bu tarayıcıya kaydedilir.' : 'Select a step and add a note. Your composition is saved in this browser.'}</p></section>
     <section class="card sequencer">
       <div class="studio-tools">

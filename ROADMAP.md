@@ -4,7 +4,7 @@
 
 - Responsive Player, Explore, Lab, Library, Studio, and Settings in English and Turkish.
 - Four image datasets, aligned globe and 2D views where supported, and a 2D view for GEDI Forest Height.
-- Motif and Flow playback, shared Player/Lab transport and scan speed, and Light, Dark, and Black themes with custom accents.
+- Motif, Flow, and RGB Chords, with automatic column scanning and selected-row playback on the shared Player and Lab transport. Light, Dark, and AMOLED themes use static stars and support custom accents.
 - Local Studio editing and preview, WAV export, and WebM / Opus export where the browser supports recording in that format.
 
 ## Verification still open
