@@ -30,7 +30,7 @@ body:
         Device and OS:
         Dataset:
         Listening mode (Data Listening or Ambient):
-        Playback style (Motif or Flow):
+        Playback style (Motif, Flow, or RGB Chords):
         View (Globe or 2D):
         Scan speed:
   - type: textarea
