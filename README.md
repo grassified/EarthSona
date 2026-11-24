@@ -73,6 +73,8 @@ npm run preview -- --host 127.0.0.1
 
 The build runs the TypeScript check and writes the static Vite output to `dist/`. Preview serves that output, usually at `http://127.0.0.1:4173/`. After installation, the local build serves the bundled imagery and audio code. External source links require internet access. The Node tests cover sampling, projection, Flow scheduling logic, and the shared composition beat grid. See the [roadmap](ROADMAP.md) for browser, device, accessibility, and listening checks.
 
+See the [deployment guide](docs/DEPLOYMENT.md) for static hosting and browser parity checks.
+
 ## How the app is organized
 
 EarthSona is a static TypeScript app built with Vite. [The entry module](src/main.ts) coordinates views, app state, image loading, and playback. [The dataset catalog](src/datasets.ts) defines images, classifiers, and presets. [Sampling](src/sampling.ts) reads the original image pixels, and [projection](src/projection.ts) maps globe picks into the same source image space used in 2D.
