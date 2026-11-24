@@ -1,6 +1,6 @@
 # Dataset sources and mapping
 
-The catalog lives in [src/datasets.ts](../src/datasets.ts). Each entry records the published image, preprocessing, pixel classifier, presets, and any geographic bounds. The playback signal comes from the bundled raster, including for globe interactions.
+The catalog lives in [src/datasets.ts](../src/datasets.ts). Each entry records the published image, preprocessing, pixel classifier, presets, and any geographic bounds. The playback signal comes from the bundled raster, including for globe interactions. EarthSona ships one prepared image per entry. Date ranges describe the source material or comparison represented by that image. The app samples pixels rather than traversing the upstream time series.
 
 | Bundled raster | Source and preparation | Mapping |
 | --- | --- | --- |
@@ -11,7 +11,7 @@ The catalog lives in [src/datasets.ts](../src/datasets.ts). Each entry records t
 
 Night Lights, Ocean Currents, and ISS Lightning use global equirectangular bounds. Globe picking projects back into the same normalized image space as 2D picking, so both views use the same classifier and sample coordinates. Night Lights uses its embedded basemap. The separate globe backdrop for Ocean Currents and ISS Lightning, `public/blue-marble.webp`, comes from [NASA Earth Observatory's Blue Marble Next Generation with topography and bathymetry](https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/base-topography-bathymetry/).
 
-Named presets start with a 25 × 25 patch and can expand to 51 × 51. Map audition and selected-row scans use the smaller patch. Automatic scans sample 15-pixel-wide columns. GEDI scans wrap within the visible footprint of the still. The scheduler uses the latest usable sample for each note or chord. A standard category qualifies with five pixels and 0.8% coverage. Night Lights treats two qualifying classes as mixed when their counts differ by less than 25% of their combined count. RGB Chords averages the original pixels independently of display brightness. The implementation lives in [src/sampling.ts](../src/sampling.ts).
+Named presets start with a 25 × 25 patch and can expand to 51 × 51. Map audition and selected-row scans use the smaller patch. Automatic scans sample 15-pixel-wide columns. GEDI scans wrap within the visible footprint of the still. The scheduler uses the latest usable sample for each note or chord. A standard category qualifies with five pixels and 0.8% coverage. Night Lights treats two qualifying classes as mixed when their counts differ by less than 25% of their combined count. RGB Chords averages the original pixels independently of display brightness. Pixel coverage describes the visible image. It cannot be converted into a temperature, canopy height, light intensity, or lightning event count from the app’s mapping. The implementation lives in [src/sampling.ts](../src/sampling.ts).
 
 NASA imagery is credited separately from the app's [code license](../LICENSE). See the linked source pages and [NASA's Images and Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/). `public/asteronix.webp` is the Asteronix team mark. `public/starfield.webp` is a procedurally generated decorative texture.
 
@@ -21,3 +21,7 @@ NASA imagery is credited separately from the app's [code license](../LICENSE). S
 2. Add a `Dataset` entry in `src/datasets.ts` with an ID, local image path, dimensions, and classifier. Set the equirectangular projection and geographic bounds only after verifying alignment of the published crop. Leave `geography` unset when alignment is unknown, as with the GEDI still.
 3. Validate contrasting presets on the actual bundled raster. Night Lights uses normalized points `{ x: .690, y: .378 }` for Western India and `{ x: .466, y: .270 }` for Western Europe. Its classifier returns `1` for qualifying purple pixels, `-1` for qualifying orange pixels, and `0` otherwise. Confirm opposite contours, check a weak or empty patch, and compare equivalent globe and 2D picks when alignment is available.
 4. Write both English and Turkish titles, categories, descriptions, preset names, processing notes, mapping explanations, and sign labels. State what the source visualization represents and how the app maps displayed pixels to sound. For example, ISS Lightning coverage is the fraction of visible mark pixels in the sample. Run the [contributor checks](../CONTRIBUTING.md).
+
+## Quantitative dataset proposals
+
+The [roadmap](../ROADMAP.md#v030--scientific-sonification) proposes a separate quantitative sampling path. For each candidate, record the versioned upstream source and reuse terms, variable and units, spatial and temporal coverage, grid and alignment, missing-data rules, normalization, reproducible processing steps, and reference values for validation. Keep large upstream files outside the normal application bundle.
